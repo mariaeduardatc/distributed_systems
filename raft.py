@@ -126,14 +126,14 @@ class RaftNode:
             with self.lock:
                 leader_id = message.get('leader_id')
                 term = message.get('term', 0)
-                state_value = message.get('state_value', '')  # Add this line
+                state_value = message.get('state_value', '')
                 
                 if term >= self.current_term:
                     was_leader = self.state == 'leader'
                     self.current_term = term
                     self.state = 'follower'
                     self.last_heartbeat = time.time()
-                    self.state_value = state_value  # Add this line to sync state
+                    self.state_value = state_value 
                     if was_leader:
                         print(f"Node {self.node_id} stepping down: received heartbeat from Node {leader_id} with term {term}")
                     return {'term': self.current_term, 'success': True}
@@ -155,7 +155,7 @@ class RaftNode:
                     (self.voted_for is None or self.voted_for == candidate_id)):
                     self.voted_for = candidate_id
                     self.current_term = term
-                    self.last_heartbeat = time.time()  # Reset heartbeat timer
+                    self.last_heartbeat = time.time() 
                     print(f"Node {self.node_id} voting for Node {candidate_id}")
                     return {'term': self.current_term, 'vote_granted': True}
                 
@@ -180,8 +180,8 @@ class RaftNode:
                     'leader_port': self.find_current_leader()
                 }
 
-            new_value = message.get('value', {})  # Accept a dictionary as the new value
-            self.state_value.update(new_value)  # Update the state dictionary
+            new_value = message.get('value', {})
+            self.state_value.update(new_value)
             print(f"Node {self.node_id} (Leader) updating state: {self.state_value}")
 
             # Propagate state to followers via heartbeats
@@ -208,15 +208,16 @@ class RaftNode:
         Returns:
             int or None: Port number of the current leader if found, None otherwise
         """
-        # Simple implementation - try to contact other nodes
+        # Iterates over the port list
         for port in [5000, 5001, 5002]:
+            # A node doesn't need to query itself
             if port == self.port:
                 continue
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.settimeout(0.5)
-                    s.connect(('localhost', port))
-                    s.send(json.dumps({'type': 'get_state'}).encode())
+                    s.connect(('localhost', port)) # Assumption
+                    s.send(json.dumps({'type': 'get_state'}).encode()) # Will hold the info about the leader
                     response = json.loads(s.recv(1024).decode())
                     if response.get('is_leader', False):
                         return port
@@ -256,7 +257,7 @@ class RaftNode:
         """
         # First acquire lock briefly to update state
         with self.lock:
-            if self.state == 'leader':  # Quick check if we're already leader
+            if self.state == 'leader':
                 return
                 
             print(f"Node {self.node_id} starting election")
@@ -330,7 +331,7 @@ class RaftNode:
                 print(f"Node {self.node_id} received vote. Total votes: {self.votes_received}")
                 
                 # Check if we have majority
-                if self.votes_received >= 2:  # Majority of 3 nodes
+                if self.votes_received >= 2:
                     self.become_leader()
 
     def become_leader(self):
@@ -339,8 +340,8 @@ class RaftNode:
         
         Initializes leader state and begins sending heartbeats to other nodes.
         """
-        # We already have the lock from handle_vote_granted
-        if self.state == 'candidate':  # Double check we're still candidate
+        # Already have the lock from handle_vote_granted
+        if self.state == 'candidate':
             self.state = 'leader'
             self.last_heartbeat = time.time()
             print(f"Node {self.node_id} became leader for term {self.current_term}")
@@ -399,7 +400,7 @@ class RaftNode:
             'type': 'heartbeat',
             'term': term,
             'leader_id': self.node_id,
-            'state_value': self.state_value  # Add this line to include state in heartbeats
+            'state_value': self.state_value
         }
         
         try:

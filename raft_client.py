@@ -13,7 +13,7 @@ def send_command(host: str, port: int, command: dict) -> None:
     """
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(2)  # Set 2 second timeout
+            s.settimeout(2)
             print(f"Connecting to {host}:{port}...")
             s.connect((host, port))
             
