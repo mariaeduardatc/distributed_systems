@@ -6,6 +6,19 @@ import random
 from threading import Thread, Lock, Event
 
 class RaftNode:
+    """
+    A node in the Raft consensus algorithm implementation.
+
+    Parameters:
+        node_id (int): Unique identifier for the node
+        port (int): Port number the node will listen on
+
+    Attributes:
+        state (str): Current state of the node ('follower', 'candidate', or 'leader')
+        current_term (int): Latest term server has seen
+        voted_for (int): Candidate ID that received vote in current term
+        state_value (dict): Node's current state data
+    """
     def __init__(self, node_id, port):
         self.node_id = node_id
         self.port = port
@@ -31,10 +44,23 @@ class RaftNode:
         print(f"Node {self.node_id} initialized on port {self.port}")
 
     def get_random_timeout(self):
+        """
+        Generates a random election timeout value.
+
+        Returns:
+            float: Random timeout value between MIN_TIMEOUT and MAX_TIMEOUT
+        """
         return random.uniform(self.MIN_TIMEOUT, self.MAX_TIMEOUT)
 
     def start(self):
-        """Start the node"""
+        """
+        Starts the Raft node, initializing the server socket and spawning necessary threads.
+        
+        Starts three main components:
+        - Server socket to accept incoming connections
+        - Election timer thread
+        - Heartbeat sender thread (if leader)
+        """
         self.server_socket.bind(('localhost', self.port))
         self.server_socket.listen(5)
         print(f"Node {self.node_id} listening on port {self.port}")
@@ -61,7 +87,12 @@ class RaftNode:
                     print(f"Error accepting connection: {e}")
 
     def handle_connection(self, client_socket):
-        """Handle client connection"""
+        """
+        Handles incoming TCP connections and processes received messages.
+
+        Parameters:
+            client_socket (socket.socket): Socket object for the client connection
+        """
         try:
             data = client_socket.recv(1024).decode()
             if data:
@@ -76,7 +107,15 @@ class RaftNode:
             client_socket.close()
 
     def handle_message(self, message):
-        """Handle incoming message"""
+        """
+        Processes incoming messages based on their type.
+
+        Parameters:
+            message (dict): Received message containing 'type' and other relevant fields
+
+        Returns:
+            dict: Response message containing appropriate fields based on message type
+        """
         msg_type = message.get('type')
 
         if msg_type == 'set_state':
@@ -123,6 +162,16 @@ class RaftNode:
                 return {'term': self.current_term, 'vote_granted': False}
 
     def handle_set_state(self, message):
+        """
+        Handles state update requests from clients.
+
+        Parameters:
+            message (dict): Message containing new state value to be set
+
+        Returns:
+            dict: Response containing success status and error message if applicable
+                 If not leader, includes the current leader's port
+        """
         with self.lock:
             if self.state != 'leader':
                 return {
@@ -139,7 +188,12 @@ class RaftNode:
             return {'success': True}
 
     def handle_get_state(self):
-        """Handle get_state request"""
+        """
+        Retrieves the current state of the node.
+
+        Returns:
+            dict: Contains current state value, success status, and whether node is leader
+        """
         with self.lock:
             return {
                 'success': True,
@@ -148,7 +202,12 @@ class RaftNode:
         }
 
     def find_current_leader(self):
-        """Try to find the current leader's port"""
+        """
+        Attempts to locate the current leader by querying other nodes.
+
+        Returns:
+            int or None: Port number of the current leader if found, None otherwise
+        """
         # Simple implementation - try to contact other nodes
         for port in [5000, 5001, 5002]:
             if port == self.port:
@@ -166,7 +225,12 @@ class RaftNode:
         return None
 
     def run_election_timer(self):
-        """Monitor for election timeout"""
+        """
+        Monitors election timeout and triggers new election when necessary.
+        
+        Continuously checks if the time since last heartbeat exceeds the election timeout.
+        If timeout occurs, initiates a new election.
+        """
         while not self.shutdown_event.is_set():
             time.sleep(0.1)
             
@@ -185,7 +249,11 @@ class RaftNode:
                 self.start_election()
 
     def start_election(self):
-        """Start a new election"""
+        """
+        Initiates a new election when the node becomes a candidate.
+        
+        Increments current term, votes for self, and requests votes from other nodes.
+        """
         # First acquire lock briefly to update state
         with self.lock:
             if self.state == 'leader':  # Quick check if we're already leader
@@ -208,7 +276,13 @@ class RaftNode:
                 print(f"Error requesting vote from port {port}: {e}")
 
     def request_vote(self, port, term):
-        """Send vote request to another node"""
+        """
+        Sends a vote request to another node.
+
+        Parameters:
+            port (int): Port number of the target node
+            term (int): Current term number for the vote request
+        """
         request = {
             'type': 'request_vote',
             'term': term,
@@ -240,7 +314,15 @@ class RaftNode:
             print(f"Error requesting vote from port {port}: {e}")
 
     def handle_vote_granted(self, term):
-        """Handle received vote"""
+        """
+        Processes a granted vote from another node.
+
+        Parameters:
+            term (int): Term number for which the vote was granted
+
+        Notes:
+            If majority votes received, transitions node to leader state
+        """
         with self.lock:
             # Only count the vote if we're still a candidate and in the same term
             if self.state == 'candidate' and self.current_term == term:
@@ -252,7 +334,11 @@ class RaftNode:
                     self.become_leader()
 
     def become_leader(self):
-        """Transition to leader state"""
+        """
+        Transitions the node to leader state after winning an election.
+        
+        Initializes leader state and begins sending heartbeats to other nodes.
+        """
         # We already have the lock from handle_vote_granted
         if self.state == 'candidate':  # Double check we're still candidate
             self.state = 'leader'
@@ -262,7 +348,11 @@ class RaftNode:
             Thread(target=self.send_initial_heartbeats, daemon=True).start()
             
     def send_initial_heartbeats(self):
-        """Send immediate heartbeats upon becoming leader"""
+        """
+        Sends immediate heartbeats to all other nodes upon becoming leader.
+        
+        Ensures followers quickly recognize the new leader and maintain consistency.
+        """
         print(f"Sending initial heartbeats as new leader for term {self.current_term}")
         current_term = self.current_term
         for port in self.other_nodes:
@@ -272,7 +362,12 @@ class RaftNode:
                 print(f"Error sending initial heartbeat to port {port}: {e}")
     
     def send_heartbeats(self):
-        """Send heartbeats to other nodes if leader"""
+        """
+        Continuously sends heartbeats to other nodes while in leader state.
+        
+        Runs in a separate thread, sending periodic heartbeats to maintain leadership
+        and propagate state changes.
+        """
         while not self.shutdown_event.is_set():
             with self.lock:
                 is_leader = self.state == 'leader'
@@ -289,7 +384,17 @@ class RaftNode:
         time.sleep(0.5)  # Wait before next heartbeat round
 
     def send_heartbeat(self, port, term):
-        """Send a single heartbeat to another node"""
+        """
+        Sends a single heartbeat message to another node.
+
+        Parameters:
+            port (int): Port number of the target node
+            term (int): Current term number
+            
+        Notes:
+            Includes current state data in heartbeat to maintain consistency
+            Steps down if higher term is discovered in response
+        """
         heartbeat = {
             'type': 'heartbeat',
             'term': term,
@@ -328,7 +433,11 @@ class RaftNode:
             print(f"Unexpected error sending heartbeat to port {port}: {e}")
 
     def shutdown(self):
-        """Shutdown the node"""
+        """
+        Gracefully shuts down the node.
+        
+        Stops all running threads and closes the server socket.
+        """
         self.shutdown_event.set()
         self.server_socket.close()
 
