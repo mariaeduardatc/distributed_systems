@@ -37,11 +37,11 @@ python raft_client.py get_state
 
 #### All comments and docstrings are mine. They were a way I found to try to show I have an understanding of my code (especially the sections where I used AI more heavily——mentioned bellow)
 
-# Shortcomings
+## Shortcomings
 1. The code does not have a log, an important part of building a Raft consensus algorithm. Right now, I directly update the states without saving the past state etc on a log. If there is a disk crash the data would be lost.
 2. State updates are sent via heartbeats without acknowledgment. If a follower temporarily misses a heartbeat due to network issues or briefly goes offline, it might miss a state update. When it comes back online, there's no mechanism to detect or recover this missed update since the leader doesn't track which followers have successfully received and applied which updates. If the leader fails immediately after making a change, but before the next heartbeat, that change might be lost entirely, violating the consistency guarantees that Raft is supposed to provide.
 
-# AI Usage Statement
+## AI Usage Statement
 Claude helped me in the following parts of my code:
 
 - **find_current_leader()**: While creating this function I knew I could probably use the information 'get_state' gives me about the leader, but I was not sure how to do it. I gave Claude my functions that handle state for context, and asked how I could use their information to build a function to find the leader. Claude was responsible for the "with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:" section of this part of the code (used this as inspiration for request_vote()).
