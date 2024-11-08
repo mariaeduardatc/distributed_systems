@@ -29,9 +29,6 @@ python raft_client.py set_state numbers "[1, 2, 3, 4]"
 # Set a dictionary
 python raft_client.py set_state config '{"host": "localhost", "port": 8080}'
 
-# Set a nested structure
-python raft_client.py set_state generals '{"general1": {"ready": true, "troops": 100}, "general2": {"ready": false, "troops": 50}}'
-
 # Get the state
 python raft_client.py get_state
 ```
