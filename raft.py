@@ -12,7 +12,7 @@ class RaftNode:
         self.state = 'follower'
         self.current_term = 0
         self.voted_for = None
-        self.state_value = ""
+        self.state_value = {}
         self.lock = Lock()
         self.shutdown_event = Event()
         self.last_heartbeat = time.time()
@@ -123,7 +123,6 @@ class RaftNode:
                 return {'term': self.current_term, 'vote_granted': False}
 
     def handle_set_state(self, message):
-        """Handle set_state request"""
         with self.lock:
             if self.state != 'leader':
                 return {
@@ -131,13 +130,12 @@ class RaftNode:
                     'error': 'Not the leader',
                     'leader_port': self.find_current_leader()
                 }
-            
-            new_value = message.get('value', '')
-            self.state_value = new_value
-            print(f"Node {self.node_id} (Leader) setting state to: {new_value}")
-            
+
+            new_value = message.get('value', {})  # Accept a dictionary as the new value
+            self.state_value.update(new_value)  # Update the state dictionary
+            print(f"Node {self.node_id} (Leader) updating state: {self.state_value}")
+
             # Propagate state to followers via heartbeats
-            # (The state will be sent in the next heartbeat cycle)
             return {'success': True}
 
     def handle_get_state(self):
